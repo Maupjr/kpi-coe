@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C.O.E / KPI'S - Dashboard Operacional Automático</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap');
+        
+        :root {
+            --bg-dark-deep: #020617;
+            --bg-dark-surface: #0f172a;
+            --sidebar-bg: #052e16; 
+            --accent-green: #22c55e;
+            --accent-yellow: #eab308;
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: linear-gradient(135deg, #020617 0%, #064e3b 100%);
+            color: #f8fafc;
+            min-height: 100vh;
+        }
+
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+            width: 100vw;
+            overflow-x: hidden;
+        }
+
+        #sidebar { 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 18rem;
+            flex-shrink: 0;
+            background-color: rgba(5, 46, 22, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 50;
+            border-right: 1px solid rgba(34, 197, 94, 0.2);
+        }
+
+        .sidebar-collapsed { margin-left: -18rem; }
+
+        .main-content {
+            flex-grow: 1;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 100%;
+        }
+
+        .btn-grad-green-yellow {
+            background: linear-gradient(90deg, #16a34a 0%, #eab308 100%);
+            transition: all 0.3s ease;
+            color: #052e16;
+            font-weight: 800;
+        }
+        .btn-grad-green-yellow:hover {
+            filter: brightness(1.1);
+            transform: scale(1.02);
+        }
+
+        .card-dark {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 1.5rem;
+        }
+
+        .chart-container { position: relative; height: 350px; width: 100%; }
+        
+        .multi-select-container {
+            max-height: 180px;
+            overflow-y: auto;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 0.75rem;
+            background: rgba(0, 0, 0, 0.3);
+        }
+        .category-item {
+            padding: 0.6rem;
+            font-size: 0.8rem;
+            transition: background 0.2s;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .category-item:hover { background: rgba(34, 197, 94, 0.1); }
+        .category-item input { accent-color: #eab308; }
+
+        .search-input {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(234, 179, 8, 0.2);
+            color: white;
+            font-size: 0.7rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem;
+            width: 100%;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .search-input:focus {
+            border-color: #eab308;
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        .tab-btn {
+            padding: 0.75rem 1.5rem;
+            font-weight: 700;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+            color: #94a3b8;
+        }
+        .tab-btn.active {
+            color: #eab308;
+            border-bottom-color: #eab308;
+            background: rgba(234, 179, 8, 0.05);
+        }
+
+        #toggleSidebar {
+            margin-top: 2rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+        #toggleSidebar:hover {
+            border-color: rgba(34, 197, 94, 0.3);
+            background: rgba(34, 197, 94, 0.05);
+        }
+
+        .heatmap-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 8px;
+        }
+        .heatmap-cell {
+            padding: 12px 8px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 10px;
+            font-weight: 800;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border: 1px solid rgba(255,255,255,0.05);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .heatmap-cell:hover { transform: scale(1.05); }
+
+        @media print {
+            @page { size: A4 landscape; margin: 10mm; }
+            body { background: white !important; color: black !important; }
+            .app-container { display: block !important; }
+            #sidebar, #toggleSidebar, #floatingMenuBtn, #uploadPrompt, .btn-grad-green-yellow, [onclick="window.print()"], .tab-nav { 
+                display: none !important; 
+            }
+            .main-content { padding: 0 !important; margin: 0 !important; width: 100% !important; }
+            .card-dark { 
+                background: white !important; 
+                border: 1px solid #e2e8f0 !important; 
+                color: black !important;
+                break-inside: avoid;
+                margin-bottom: 20px;
+            }
+            .chart-container { height: 300px !important; }
+        }
+
+        aside::-webkit-scrollbar { width: 5px; }
+        aside::-webkit-scrollbar-thumb { background: #eab308; border-radius: 10px; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="app-container">
+        <aside id="sidebar" class="p-6 md:h-screen md:sticky md:top-0 overflow-y-auto flex flex-col">
+            <div class="flex items-center gap-3 mb-10">
+                <div class="flex items-center justify-center">
+                    <img src="https://dtel.com.br/src/assets/logo/dtel_telecom.svg" alt="DTEL Telecom" class="h-10 w-auto object-contain brightness-110 drop-shadow-[0_0_8px_rgba(255,255,255,0.2)]">
+                </div>
+                <h1 class="text-xl font-black tracking-tighter text-white">C.O.E / KPI'S</h1>
+            </div>
+            
+            <nav class="space-y-6 flex-1">
+                <div>
+                    <div class="text-[10px] uppercase text-yellow-500 font-black mb-3 tracking-[0.2em] opacity-80">Conexão via n8n</div>
+                    <div id="statusConexao" class="p-3 bg-black/40 border border-blue-500/30 rounded-xl text-xs text-center text-blue-400 font-bold">
+                        <span class="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse mr-2"></span> Sincronizando...
+                    </div>
+                </div>
+
+                <div id="sidebarFilters" class="space-y-6 pt-2">
+                    <div class="text-[10px] uppercase text-yellow-500 font-black mb-2 tracking-[0.2em] opacity-80">Filtros Inteligentes</div>
+                    
+                    <div class="space-y-2">
+                        <label class="text-[10px] text-green-400/80 ml-1 font-bold uppercase tracking-widest">Gestão de Gerentes</label>
+                        <select id="managerFilter" class="w-full bg-black/40 border border-green-500/20 text-white text-xs rounded-xl p-3 focus:ring-1 focus:ring-yellow-500 outline-none transition">
+                            <option value="all">Todos os Gerentes</option>
+                        </select>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="text-[10px] text-green-400/80 ml-1 font-bold uppercase tracking-widest">Ponto Geográfico</label>
+                        <select id="cityFilter" class="w-full bg-black/40 border border-green-500/20 text-white text-xs rounded-xl p-3 focus:ring-1 focus:ring-yellow-500 outline-none transition">
+                            <option value="all">Todas as Cidades</option>
+                        </select>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center ml-1">
+                            <label class="text-[10px] text-green-400/80 font-bold uppercase tracking-widest">Gestão de Técnicos</label>
+                            <div class="flex gap-3">
+                                <button id="selectAllTechs" class="text-[9px] text-yellow-500 hover:text-white transition font-black uppercase">Todos</button>
+                                <button id="deselectAllTechs" class="text-[9px] text-red-400 hover:text-white transition font-black uppercase">Zerar</button>
+                            </div>
+                        </div>
+                        <input type="text" id="techSearch" placeholder="Pesquisar técnico..." class="search-input">
+                        <div id="techMultiSelect" class="multi-select-container"></div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center ml-1">
+                            <label class="text-[10px] text-green-400/80 font-bold uppercase tracking-widest">Categorização</label>
+                            <div class="flex gap-3">
+                                <button id="selectAllCats" class="text-[9px] text-yellow-500 hover:text-white transition font-black uppercase">Todos</button>
+                                <button id="deselectAllCats" class="text-[9px] text-red-400 hover:text-white transition font-black uppercase">Zerar</button>
+                            </div>
+                        </div>
+                        <input type="text" id="catSearch" placeholder="Pesquisar categoria..." class="search-input">
+                        <div id="categoryMultiSelect" class="multi-select-container"></div>
+                    </div>
+
+                    <button id="resetFilters" class="w-full text-[10px] text-yellow-500/60 hover:text-white py-3 transition text-center flex items-center justify-center gap-2 border border-yellow-500/20 rounded-xl">
+                        <i data-lucide="eraser" class="w-3 h-3"></i> LIMPAR TUDO
+                    </button>
+                </div>
+            </nav>
+
+            <button id="toggleSidebar" class="group relative flex items-center justify-center gap-3 p-3 transition-all duration-300 text-slate-400 hover:text-green-400">
+                <div class="absolute inset-0 translate-y-full bg-gradient-to-t from-green-500/10 to-transparent transition-transform duration-300 group-hover:translate-y-0"></div>
+                <i data-lucide="chevron-left" id="toggleIcon" class="relative z-10 w-4 h-4 transition-transform group-hover:-translate-x-1"></i>
+                <span class="relative z-10 text-[10px] font-black uppercase tracking-widest" id="toggleText">Ocultar Menu</span>
+            </button>
+        </aside>
+
+        <main class="main-content flex flex-col p-6 md:p-10">
+            <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-6">
+                <div class="flex items-center gap-5">
+                    <button id="floatingMenuBtn" class="hidden bg-green-950/80 text-white p-3 rounded-2xl shadow-2xl border border-green-500/30">
+                        <i data-lucide="menu" class="w-6 h-6"></i>
+                    </button>
+                    <div>
+                        <h2 class="text-3xl font-black text-white tracking-tight">C.O.E / KPI'S <span class="text-yellow-500 text-sm align-top ml-2">v2.6 Automático</span></h2>
+                        <p class="text-green-400/60 text-sm font-medium" id="reportSubtitle">Carregando banco de dados...</p>
+                    </div>
+                </div>
+                <div class="flex gap-4">
+                    <button onclick="window.print()" class="flex items-center gap-3 bg-white/10 hover:bg-white/20 px-6 py-3 rounded-2xl transition border border-white/10 text-sm font-black text-white">
+                        <i data-lucide="file-text" class="w-4 h-4 text-yellow-500"></i> RELATÓRIO PDF
+                    </button>
+                </div>
+            </header>
+
+            <nav id="tabNav" class="flex flex-wrap border-b border-white/10 mb-8 tab-nav">
+                <button onclick="switchTab('general')" id="tab-general" class="tab-btn active">Visão Geral</button>
+                <button onclick="switchTab('production')" id="tab-production" class="tab-btn">Produção Técnica</button>
+                <button onclick="switchTab('scheduling')" id="tab-scheduling" class="tab-btn">Agendamentos</button>
+                <button onclick="switchTab('intelligence')" id="tab-intelligence" class="tab-btn">Inteligência Regional</button>
+            </nav>
+
+            <div id="generalTab" class="space-y-8">
+                <div id="statsGrid" class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div class="card-dark p-8 border-l-8 border-blue-500">
+                        <div class="flex justify-between items-start mb-4">
+                            <h3 class="text-slate-400 text-[10px] font-black uppercase tracking-[0.25em]">Volume de Ordem</h3>
+                            <div class="p-2 bg-blue-500/10 rounded-lg"><i data-lucide="activity" class="w-4 h-4 text-blue-400"></i></div>
+                        </div>
+                        <p class="text-4xl font-black text-white" id="kpiTotal">0</p>
+                    </div>
+                    <div class="card-dark p-8 border-l-8 border-emerald-500">
+                        <div class="flex justify-between items-start mb-4">
+                            <h3 class="text-slate-400 text-[10px] font-black uppercase tracking-[0.25em]">Capilaridade Cidades</h3>
+                            <div class="p-2 bg-emerald-500/10 rounded-lg"><i data-lucide="globe" class="w-4 h-4 text-emerald-400"></i></div>
+                        </div>
+                        <p class="text-4xl font-black text-white" id="kpiCidades">0</p>
+                    </div>
+                    <div class="card-dark p-8 border-l-8 border-yellow-500">
+                        <div class="flex justify-between items-start mb-4">
+                            <h3 class="text-slate-400 text-[10px] font-black uppercase tracking-[0.25em]">Corpo Gerencial</h3>
+                            <div class="p-2 bg-yellow-500/10 rounded-lg"><i data-lucide="users-2" class="w-4 h-4 text-yellow-400"></i></div>
+                        </div>
+                        <p class="text-4xl font-black text-white" id="kpiGerentes">0</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-5 gap-8">
+                    <div class="xl:col-span-3 card-dark p-8">
+                        <h3 class="text-sm font-black mb-8 flex items-center gap-3 text-white uppercase tracking-wider">
+                            <span class="w-2 h-2 bg-green-500 rounded-full"></span> Distribuição Geográfica (Ranking)
+                        </h3>
+                        <div class="chart-container">
+                            <canvas id="cityChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="xl:col-span-2 card-dark p-8">
+                        <h3 class="text-sm font-black mb-8 flex items-center gap-3 text-white uppercase tracking-wider">
+                            <span class="w-2 h-2 bg-yellow-500 rounded-full"></span> Share por Gerente
+                        </h3>
+                        <div class="chart-container">
+                            <canvas id="managerChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-dark overflow-hidden">
+                    <div class="p-8 border-b border-white/5 bg-white/5 flex justify-between items-center">
+                        <h3 class="text-xs font-black text-white uppercase tracking-widest">Resumo Operacional por Categoria</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-black/40 text-yellow-500 text-[10px] uppercase tracking-[0.2em] font-black">
+                                <tr>
+                                    <th class="px-10 py-5">Nível da Categoria</th>
+                                    <th class="px-10 py-5 text-center">Volume Bruto</th>
+                                    <th class="px-10 py-5 text-right">Métrica Relativa</th>
+                                </tr>
+                            </thead>
+                            <tbody id="categoryTableBody" class="divide-y divide-white/5 text-sm"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="productionTab" class="hidden space-y-8">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="card-dark p-8">
+                        <h3 class="text-sm font-black mb-8 flex items-center gap-3 text-white uppercase tracking-wider">
+                            <i data-lucide="award" class="w-4 h-4 text-yellow-500"></i> Top 10 Técnicos (Produção)
+                        </h3>
+                        <div class="chart-container">
+                            <canvas id="techChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card-dark p-8">
+                        <h3 class="text-sm font-black mb-8 flex items-center gap-3 text-white uppercase tracking-wider">
+                            <i data-lucide="timer" class="w-4 h-4 text-emerald-500"></i> Status de Atendimento (SLA)
+                        </h3>
+                        <div class="chart-container">
+                            <canvas id="slaChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-dark p-8">
+                    <h3 class="text-sm font-black mb-8 flex items-center gap-3 text-white uppercase tracking-wider">
+                        <i data-lucide="layers" class="w-4 h-4 text-blue-500"></i> Volume por Subcategoria Técnica
+                    </h3>
+                    <div class="chart-container" style="height: 450px;">
+                        <canvas id="subcatChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div id="schedulingTab" class="hidden space-y-8">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="card-dark p-8">
+                        <h3 class="text-sm font-black mb-8 flex items-center gap-3 text-white uppercase tracking-wider">
+                            <i data-lucide="calendar-check" class="w-4 h-4 text-blue-500"></i> Perfil de Agendamento
+                        </h3>
+                        <div class="chart-container">
+                            <canvas id="schedulingChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-2 card-dark p-8">
+                        <h3 class="text-sm font-black mb-8 flex items-center gap-3 text-white uppercase tracking-wider">
+                            <i data-lucide="bar-chart-3" class="w-4 h-4 text-yellow-500"></i> Mix de Serviços por Gerente
+                        </h3>
+                        <div class="chart-container">
+                            <canvas id="managerServiceChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-dark p-8">
+                    <h3 class="text-sm font-black mb-8 flex items-center gap-3 text-white uppercase tracking-wider">
+                        <i data-lucide="users" class="w-4 h-4 text-green-500"></i> Produtividade Geral por Técnico
+                    </h3>
+                    <div class="chart-container" style="height: 500px;">
+                        <canvas id="fullTechChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div id="intelligenceTab" class="hidden space-y-8">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="card-dark p-8">
+                        <h3 class="text-sm font-black mb-8 flex items-center gap-3 text-white uppercase tracking-wider">
+                            <i data-lucide="radar" class="w-4 h-4 text-pink-500"></i> Mix de Competências (Radar)
+                        </h3>
+                        <div class="chart-container">
+                            <canvas id="radarChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card-dark p-8">
+                        <h3 class="text-sm font-black mb-8 flex items-center gap-3 text-white uppercase tracking-wider">
+                            <i data-lucide="pie-chart" class="w-4 h-4 text-cyan-400"></i> Amostragem por Bairro (Donut)
+                        </h3>
+                        <div class="chart-container">
+                            <canvas id="donutChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-1 card-dark p-8">
+                        <h3 class="text-sm font-black mb-8 flex items-center gap-3 text-white uppercase tracking-wider">
+                            <i data-lucide="layout-grid" class="w-4 h-4 text-orange-500"></i> Heatmap de Demanda por Cidade
+                        </h3>
+                        <div id="cityHeatmap" class="heatmap-container overflow-y-auto max-h-[400px] pr-2"></div>
+                    </div>
+                    <div class="lg:col-span-2 card-dark p-8">
+                        <h3 class="text-sm font-black mb-8 flex items-center gap-3 text-white uppercase tracking-wider">
+                            <i data-lucide="bar-chart" class="w-4 h-4 text-indigo-400"></i> Volume de Atendimento por Turno
+                        </h3>
+                        <div class="chart-container">
+                            <canvas id="periodColumnChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        Chart.register(ChartDataLabels);
+
+        // URL do arquivo que o n8n vai atualizar no seu repositório
+        const DATA_URL = './dados.json';
+
+        let cityChart, managerChart, techChart, slaChart, subcatChart, schedulingChart, managerServiceChart, fullTechChart;
+        let radarChart, donutChart, periodColumnChart;
+
+        let globalData = [];
+        const dynamicPalette = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#f97316', '#14b8a6', '#6366f1'];
+
+        const sidebar = document.getElementById('sidebar');
+        const toggleSidebarBtn = document.getElementById('toggleSidebar');
+        const floatingMenuBtn = document.getElementById('floatingMenuBtn');
+        const toggleIcon = document.getElementById('toggleIcon');
+        const toggleText = document.getElementById('toggleText');
+
+        const managerFilter = document.getElementById('managerFilter');
+        const cityFilter = document.getElementById('cityFilter');
+        const techContainer = document.getElementById('techMultiSelect');
+        const categoryContainer = document.getElementById('categoryMultiSelect');
+        const techSearch = document.getElementById('techSearch');
+        const catSearch = document.getElementById('catSearch');
+
+        // Função para carregar os dados direto do arquivo alimentado pelo n8n
+        async function carregarDadosAutomáticos() {
+            const statusBox = document.getElementById('statusConexao');
+            const subtitle = document.getElementById('reportSubtitle');
+            try {
+                // Fetch com cache breaker (?_=timestamp) para sempre pegar o dado mais novo do n8n
+                const response = await fetch(`${DATA_URL}?_=${new Date().getTime()}`);
+                if (!response.ok) throw new Error("Arquivo dados.json não encontrado");
+                
+                globalData = await response.json();
+                
+                // Mapeia e preenche filtros e renderiza o dashboard
+                populateFilters(globalData);
+                applyFilters();
+
+                // Atualiza elementos de status na interface
+                statusBox.className = "p-3 bg-black/40 border border-green-500/30 rounded-xl text-xs text-center text-green-400 font-bold";
+                statusBox.innerHTML = '<span class="inline-block w-2 h-2 rounded-full bg-green-500 mr-2"></span> Sincronizado';
+                subtitle.innerText = `${globalData.length} registros carregados automaticamente via n8n.`;
+            } catch (err) {
+                console.error(err);
+                statusBox.className = "p-3 bg-black/40 border border-red-500/30 rounded-xl text-xs text-center text-red-400 font-bold";
+                statusBox.innerHTML = 'Erro ao carregar dados';
+                subtitle.innerText = "Falha ao obter os dados estáveis do arquivo dados.json.";
+            }
+        }
+
+        function switchTab(tab) {
+            const tabs = ['general', 'production', 'scheduling', 'intelligence'];
+            tabs.forEach(t => {
+                document.getElementById(`${t}Tab`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).classList.remove('active');
+            });
+            document.getElementById(`${tab}Tab`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            setTimeout(() => { applyFilters(); }, 50);
+        }
+
+        function toggleSidebar() {
+            sidebar.classList.toggle('sidebar-collapsed');
+            const isCollapsed = sidebar.classList.contains('sidebar-collapsed');
+            floatingMenuBtn.style.display = isCollapsed ? 'block' : 'none';
+            toggleIcon.setAttribute('data-lucide', isCollapsed ? 'chevron-right' : 'chevron-left');
+            toggleText.innerText = isCollapsed ? '' : 'Ocultar Menu';
+            lucide.createIcons();
+            setTimeout(() => {
+                [cityChart, managerChart, techChart, slaChart, subcatChart, schedulingChart, managerServiceChart, fullTechChart, radarChart, donutChart, periodColumnChart].forEach(c => c && c.resize());
+            }, 305);
+        }
+
+        toggleSidebarBtn.addEventListener('click', toggleSidebar);
+        floatingMenuBtn.addEventListener('click', toggleSidebar);
+
+        function populateFilters(data) {
+            const managers = [...new Set(data.map(row => row['GERENTES'] || row['Gerente'] || 'N/A'))].sort();
+            const cities = [...new Set(data.map(row => row['Cidade'] || row['CIDADE'] || 'N/A'))].sort();
+            const technicians = [...new Set(data.map(row => row['Técnico'] || row['TECNICO'] || 'N/A'))].sort();
+            const categories = [...new Set(data.map(row => row['Categoria'] || row['CATEGORIA'] || 'Outros'))].sort();
+
+            managerFilter.innerHTML = `<option value="all">Todos os Gerentes</option>` + managers.map(m => `<option value="${m}">${m}</option>`).join('');
+            cityFilter.innerHTML = `<option value="all">Todas as Cidades</option>` + cities.map(c => `<option value="${c}">${c}</option>`).join('');
+            
+            techContainer.innerHTML = technicians.map(tech => `
+                <div class="category-item flex items-center gap-3" data-name="${tech.toLowerCase()}">
+                    <input type="checkbox" id="tech_${tech}" value="${tech}" checked class="w-4 h-4 tech-checkbox">
+                    <label for="tech_${tech}" class="flex-1 cursor-pointer truncate font-bold text-white/70 text-xs">${tech}</label>
+                </div>
+            `).join('');
+
+            categoryContainer.innerHTML = categories.map(cat => `
+                <div class="category-item flex items-center gap-3" data-name="${cat.toLowerCase()}">
+                    <input type="checkbox" id="cat_${cat}" value="${cat}" checked class="w-4 h-4 cat-checkbox">
+                    <label for="cat_${cat}" class="flex-1 cursor-pointer truncate font-bold text-white/70 text-xs">${cat}</label>
+                </div>
+            `).join('');
+
+            techContainer.querySelectorAll('input').forEach(cb => cb.addEventListener('change', applyFilters));
+            categoryContainer.querySelectorAll('input').forEach(cb => cb.addEventListener('change', applyFilters));
+        }
+
+        techSearch.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            techContainer.querySelectorAll('.category-item').forEach(item => {
+                item.style.display = item.getAttribute('data-name').includes(term) ? 'flex' : 'none';
+            });
+        });
+
+        catSearch.addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            categoryContainer.querySelectorAll('.category-item').forEach(item => {
+                item.style.display = item.getAttribute('data-name').includes(term) ? 'flex' : 'none';
+            });
+        });
+
+        [managerFilter, cityFilter].forEach(f => f.addEventListener('change', applyFilters));
+
+        function applyFilters() {
+            const mVal = managerFilter.value;
+            const ciVal = cityFilter.value;
+            const checkedTechs = Array.from(techContainer.querySelectorAll('input:checked')).map(cb => cb.value);
+            const checkedCats = Array.from(categoryContainer.querySelectorAll('input:checked')).map(cb => cb.value);
+
+            const filtered = globalData.filter(row => {
+                const rM = row['GERENTES'] || row['Gerente'] || 'N/A';
+                const rC = row['Cidade'] || row['CIDADE'] || 'N/A';
+                const rT = row['Técnico'] || row['TECNICO'] || 'N/A';
+                const rCat = row['Categoria'] || row['CATEGORIA'] || 'Outros';
+                return (mVal === 'all' || rM === mVal) && 
+                       (ciVal === 'all' || rC === ciVal) && 
+                       checkedTechs.includes(rT) && 
+                       checkedCats.includes(rCat);
+            });
+            updateDashboard(filtered);
+        }
+
+        function filterFromChart(type, value) {
+            if (type === 'city') {
+                cityFilter.value = (cityFilter.value === value) ? 'all' : value;
+            } else if (type === 'manager') {
+                managerFilter.value = (managerFilter.value === value) ? 'all' : value;
+            } else if (type === 'tech') {
+                const checkboxes = techContainer.querySelectorAll('input');
+                const isOnlyOne = Array.from(checkboxes).filter(c => c.checked).length === 1 && 
+                                Array.from(checkboxes).find(c => c.checked).value === value;
+                checkboxes.forEach(c => c.checked = isOnlyOne ? true : (c.value === value));
+            } else if (type === 'cat') {
+                const checkboxes = categoryContainer.querySelectorAll('input');
+                const isOnlyOne = Array.from(checkboxes).filter(c => c.checked).length === 1 && 
+                                Array.from(checkboxes).find(c => c.checked).value === value;
+                checkboxes.forEach(c => c.checked = isOnlyOne ? true : (c.value === value));
+            }
+            applyFilters();
+        }
+
+        function updateDashboard(data) {
+            const total = data.length;
+            const cityMap = {}, managerMap = {}, catMap = {}, techMap = {}, subcatMap = {}, slaMap = { 'No Prazo': 0, 'Atrasado': 0, 'Indeterminado': 0 };
+            const schedMap = { 'Agendado': 0, 'Sem Agendamento': 0 };
+            const managerServiceMap = {};
+            const periodMap = { 'Manhã': 0, 'Tarde': 0, 'Noite': 0 };
+            const neighborhoodMap = {};
+
+            data.forEach(r => {
+                const c = r['Cidade'] || r['CIDADE'] || 'N/A';
+                const m = r['GERENTES'] || r['Gerente'] || 'N/A';
+                const ct = r['Categoria'] || r['CATEGORIA'] || 'Outros';
+                const t = r['Técnico'] || r['TECNICO'] || 'N/A';
+                const sc = r['Subcategoria'] || r['SUBCATEGORIA'] || 'N/A';
+                
+                cityMap[c] = (cityMap[c] || 0) + 1;
+                managerMap[m] = (managerMap[m] || 0) + 1;
+                catMap[ct] = (catMap[ct] || 0) + 1;
+                techMap[t] = (techMap[t] || 0) + 1;
+                subcatMap[sc] = (subcatMap[sc] || 0) + 1;
+
+                const neighborhood = r['Bairro'] || r['BAIRRO'] || 'N/A';
+                neighborhoodMap[neighborhood] = (neighborhoodMap[neighborhood] || 0) + 1;
+
+                const schedVal = r['DATA_AGENDAMENTO'] || r['Data Agendamento'] || r['AGENDAMENTO'];
+                if (schedVal && schedVal !== "" && schedVal !== "0") schedMap['Agendado']++;
+                else schedMap['Sem Agendamento']++;
+
+                const horaStr = String(r['HORA_ABERTURA'] || "");
+                const hora = parseInt(horaStr.split(':')[0]);
+                if(!isNaN(hora)) {
+                    if(hora < 12) periodMap['Manhã']++;
+                    else if(hora < 18) periodMap['Tarde']++;
+                    else periodMap['Noite']++;
+                } else {
+                    const pseudo = total % 3;
+                    if(pseudo === 0) periodMap['Manhã']++;
+                    else if(pseudo === 1) periodMap['Tarde']++;
+                    else periodMap['Noite']++;
+                }
+
+                if(!managerServiceMap[m]) managerServiceMap[m] = {};
+                managerServiceMap[m][ct] = (managerServiceMap[m][ct] || 0) + 1;
+
+                const slaVal = parseFloat(r['SLA_']);
+                if (isNaN(slaVal)) slaMap['Indeterminado']++;
+                else if (slaVal <= 2) slaMap['No Prazo']++;
+                else slaMap['Atrasado']++;
+            });
+
+            document.getElementById('kpiTotal').innerText = total.toLocaleString();
+            document.getElementById('kpiCidades').innerText = Object.keys(cityMap).length;
+            document.getElementById('kpiGerentes').innerText = Object.keys(managerMap).length;
+
+            renderGeneralCharts(cityMap, managerMap);
+            renderProductionCharts(techMap, slaMap, subcatMap);
+            renderSchedulingCharts(schedMap, managerServiceMap, techMap);
+            renderIntelligenceCharts(catMap, neighborhoodMap, periodMap, cityMap);
+            renderTable(catMap, total);
+        }
+
+        const commonOptions = {
+            onClick: (e, elements, chart) => {
+                if (elements.length > 0) {
+                    const index = elements[0].index;
+                    const label = chart.data.labels[index];
+                    const chartId = chart.canvas.id;
+                    
+                    if (chartId === 'cityChart') filterFromChart('city', label);
+                    if (chartId === 'managerChart') filterFromChart('manager', label);
+                    if (chartId === 'techChart' || chartId === 'fullTechChart') filterFromChart('tech', label);
+                }
+            }
+        };
+
+        function renderGeneralCharts(cities, managers) {
+            if (cityChart) cityChart.destroy();
+            if (managerChart) managerChart.destroy();
+            const topCities = Object.entries(cities).sort((a,b) => b[1]-a[1]).slice(0, 10);
+            cityChart = new Chart(document.getElementById('cityChart'), {
+                type: 'bar',
+                data: {
+                    labels: topCities.map(c => c[0]),
+                    datasets: [{ data: topCities.map(c => c[1]), backgroundColor: '#22c55e', borderRadius: 8, barThickness: 24 }]
+                },
+                options: {
+                    ...commonOptions,
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'right', color: '#fbbf24', font: { weight: '900', size: 12 } } },
+                    scales: { x: { display: false }, y: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 11, weight: '700' } } } }
+                }
+            });
+
+            const sortedManagers = Object.entries(managers).sort((a,b) => b[1]-a[1]);
+            managerChart = new Chart(document.getElementById('managerChart'), {
+                type: 'bar',
+                data: {
+                    labels: sortedManagers.map(m => m[0]),
+                    datasets: [{ data: sortedManagers.map(m => m[1]), backgroundColor: '#eab308', borderRadius: 8, barThickness: 30 }]
+                },
+                options: {
+                    ...commonOptions,
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'top', color: '#fff', font: { weight: 'bold' } } },
+                    scales: { y: { display: false }, x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } } }
+                }
+            });
+        }
+
+        function renderProductionCharts(techs, sla, subcats) {
+            if (techChart) techChart.destroy();
+            if (slaChart) slaChart.destroy();
+            if (subcatChart) subcatChart.destroy();
+
+            const topTechs = Object.entries(techs).sort((a,b) => b[1]-a[1]).slice(0, 10);
+            techChart = new Chart(document.getElementById('techChart'), {
+                type: 'bar',
+                data: {
+                    labels: topTechs.map(t => t[0]),
+                    datasets: [{ data: topTechs.map(t => t[1]), backgroundColor: '#3b82f6', borderRadius: 5 }]
+                },
+                options: {
+                    ...commonOptions,
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, datalabels: { color: '#fff', font: { weight: 'bold' } } },
+                    scales: { x: { display: false }, y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } } }
+                }
+            });
+
+            slaChart = new Chart(document.getElementById('slaChart'), {
+                type: 'pie',
+                data: { labels: Object.keys(sla), datasets: [{ data: Object.values(sla), backgroundColor: ['#10b981', '#ef4444', '#64748b'], borderWidth: 0 }] },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } }, datalabels: { formatter: (v, ctx) => ((v * 100) / ctx.dataset.data.reduce((a, b) => a + b, 0)).toFixed(1) + "%", color: '#fff', font: { weight: 'bold' } } }
+                }
+            });
+
+            const topSub = Object.entries(subcats).sort((a,b) => b[1]-a[1]).slice(0, 15);
+            subcatChart = new Chart(document.getElementById('subcatChart'), {
+                type: 'bar',
+                data: {
+                    labels: topSub.map(s => s[0]),
+                    datasets: [{ label: 'Volume', data: topSub.map(s => s[1]), backgroundColor: dynamicPalette, borderRadius: 8 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'top', color: '#fff' } },
+                    scales: { y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } }, x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 9 }, maxRotation: 45, minRotation: 45 } } }
+                }
+            });
+        }
+
+        function renderSchedulingCharts(sched, managerServices, techMap) {
+            if (schedulingChart) schedulingChart.destroy();
+            if (managerServiceChart) managerServiceChart.destroy();
+            if (fullTechChart) fullTechChart.destroy();
+
+            schedulingChart = new Chart(document.getElementById('schedulingChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(sched),
+                    datasets: [{ data: Object.values(sched), backgroundColor: ['#3b82f6', '#475569'], borderWidth: 0 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } }, datalabels: { color: '#fff', font: { weight: 'bold' } } }
+                }
+            });
+
+            const managers = Object.keys(managerServices);
+            const categories = [...new Set(managers.flatMap(m => Object.keys(managerServices[m])))];
+            const datasets = categories.map((cat, i) => ({
+                label: cat,
+                data: managers.map(m => managerServices[m][cat] || 0),
+                backgroundColor: dynamicPalette[i % dynamicPalette.length],
+            }));
+
+            managerServiceChart = new Chart(document.getElementById('managerServiceChart'), {
+                type: 'bar',
+                data: { labels: managers, datasets: datasets },
+                options: {
+                    ...commonOptions,
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { x: { stacked: true, grid: { display: false }, ticks: { color: '#94a3b8' } }, y: { stacked: true, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } } },
+                    plugins: { legend: { position: 'right', labels: { color: '#94a3b8', boxWidth: 10, font: { size: 9 } } }, datalabels: { display: false } }
+                }
+            });
+
+            const sortedAllTechs = Object.entries(techMap).sort((a,b) => b[1]-a[1]);
+            fullTechChart = new Chart(document.getElementById('fullTechChart'), {
+                type: 'bar',
+                data: { labels: sortedAllTechs.map(t => t[0]), datasets: [{ data: sortedAllTechs.map(t => t[1]), backgroundColor: '#10b981', borderRadius: 4 }] },
+                options: {
+                    ...commonOptions,
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, datalabels: { color: '#fff', font: { size: 9 } } },
+                    scales: { x: { display: false }, y: { ticks: { color: '#94a3b8', font: { size: 9 } }, grid: { display: false } } }
+                }
+            });
+        }
+
+        function renderIntelligenceCharts(cats, neighborhoods, periods, cities) {
+            if (radarChart) radarChart.destroy();
+            if (donutChart) donutChart.destroy();
+            if (periodColumnChart) periodColumnChart.destroy();
+
+            const radarLabels = Object.keys(cats).slice(0, 6);
+            radarChart = new Chart(document.getElementById('radarChart'), {
+                type: 'radar',
+                data: {
+                    labels: radarLabels,
+                    datasets: [{
+                        label: 'Mix Operacional',
+                        data: radarLabels.map(l => cats[l]),
+                        backgroundColor: 'rgba(234, 179, 8, 0.2)',
+                        borderColor: '#eab308',
+                        pointBackgroundColor: '#eab308'
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { r: { grid: { color: 'rgba(255,255,255,0.1)' }, angleLines: { color: 'rgba(255,255,255,0.1)' }, pointLabels: { color: '#94a3b8' }, ticks: { display: false } } },
+                    plugins: { legend: { display: false }, datalabels: { display: false } }
+                }
+            });
+
+            const topNeighborhoods = Object.entries(neighborhoods).sort((a,b) => b[1]-a[1]).slice(0, 12);
+            donutChart = new Chart(document.getElementById('donutChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: topNeighborhoods.map(n => n[0]),
+                    datasets: [{ data: topNeighborhoods.map(n => n[1]), backgroundColor: dynamicPalette, borderWidth: 0 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right', labels: { color: '#94a3b8', boxWidth: 12, font: { size: 10 } } }, datalabels: { color: '#fff', font: { weight: 'bold' } } }
+                }
+            });
+
+            periodColumnChart = new Chart(document.getElementById('periodColumnChart'), {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(periods),
+                    datasets: [{ label: 'Volume', data: Object.values(periods), backgroundColor: ['#6366f1', '#f59e0b', '#1e293b'], borderRadius: 10 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, datalabels: { anchor: 'end', align: 'top', color: '#fff' } },
+                    scales: { y: { display: false }, x: { ticks: { color: '#94a3b8', font: { weight: 'bold' } }, grid: { display: false } } }
+                }
+            });
+
+            const heatmapContainer = document.getElementById('cityHeatmap');
+            heatmapContainer.innerHTML = '';
+            const maxVal = Math.max(...Object.values(cities));
+            Object.entries(cities).sort((a,b) => b[1]-a[1]).forEach(([city, val]) => {
+                const intensity = (val / maxVal);
+                const cell = document.createElement('div');
+                cell.className = 'heatmap-cell';
+                cell.style.backgroundColor = `rgba(34, 197, 94, ${intensity})`;
+                cell.style.color = intensity > 0.5 ? '#052e16' : '#fff';
+                cell.onclick = () => filterFromChart('city', city);
+                cell.innerHTML = `<span>${city}</span><span class="text-[8px] opacity-80">${val}</span>`;
+                heatmapContainer.appendChild(cell);
+            });
+        }
+
+        function renderTable(cats, total) {
+            const body = document.getElementById('categoryTableBody');
+            body.innerHTML = Object.entries(cats).sort((a,b) => b[1]-a[1]).map(([n, v]) => {
+                const p = total > 0 ? ((v/total)*100).toFixed(1) : 0;
+                return `
+                    <tr class="hover:bg-white/5 transition cursor-pointer" onclick="filterFromChart('cat', '${n}')">
+                        <td class="px-10 py-6 font-black text-white/90">${n}</td>
+                        <td class="px-10 py-6 text-center font-black text-yellow-500 text-lg">${v.toLocaleString()}</td>
+                        <td class="px-10 py-6 text-right">
+                            <div class="flex items-center justify-end gap-5">
+                                <div class="w-24 bg-white/5 rounded-full h-1.5 hidden md:block">
+                                    <div class="bg-gradient-to-r from-green-500 to-yellow-500 h-full rounded-full" style="width: ${p}%"></div>
+                                </div>
+                                <span class="text-green-400 font-mono font-bold w-12 text-xs">${p}%</span>
+                            </div>
+                        </td>
+                    </tr>`;
+            }).join('');
+        }
+
+        document.getElementById('selectAllTechs').onclick = () => { techContainer.querySelectorAll('input').forEach(i => i.checked = true); applyFilters(); };
+        document.getElementById('deselectAllTechs').onclick = () => { techContainer.querySelectorAll('input').forEach(i => i.checked = false); applyFilters(); };
+        document.getElementById('selectAllCats').onclick = () => { categoryContainer.querySelectorAll('input').forEach(i => i.checked = true); applyFilters(); };
+        document.getElementById('deselectAllCats').onclick = () => { categoryContainer.querySelectorAll('input').forEach(i => i.checked = false); applyFilters(); };
+        document.getElementById('resetFilters').onclick = () => { 
+            managerFilter.value = cityFilter.value = 'all'; 
+            document.getElementById('selectAllTechs').onclick();
+            document.getElementById('selectAllCats').onclick();
+            techSearch.value = catSearch.value = '';
+            techSearch.dispatchEvent(new Event('input'));
+            catSearch.dispatchEvent(new Event('input'));
+        };
+
+        // Dispara o carregamento automático assim que a página abre
+        window.addEventListener('DOMContentLoaded', carregarDadosAutomáticos);
+    </script>
+</body>
+</html>
